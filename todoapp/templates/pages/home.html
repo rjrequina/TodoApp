@@ -1,0 +1,76 @@
+{% extends "base.html" %} {% block content %}
+<div>
+  {% if request.user.is_authenticated %}
+  <div class="row white" style="margin-bottom: 20px">
+    <div class="columns large-12">
+      <form method="POST" id="add-todo">
+        {% csrf_token %}
+        <span style="display: flex">
+          <div class="fieldWrapper" style="margin-right: 10px">
+            {{ form.title }}
+          </div>
+          <input
+            type="submit"
+            value="Add"
+            class="tiny button"
+            id="submit-todo"
+          />
+        </span>
+      </form>
+    </div>
+  </div>
+  <div>
+    <div><h4>My To Do List</h4></div>
+    <div class="row white">
+      <div class="columns large-12">
+        <ul id="todo-list">
+          {% for todo in todos %}
+          <li>
+            <strong>{{ todo.title }}</strong> |
+            <em>Author: {{ todo.author }}</em> |
+            <span>Status: {{ todo.status }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div>You must be authenticated to access your todo list.</div>
+  {% endif %}
+</div>
+{% endblock content %} {% block customjs %}
+<script>
+  $("#add-todo").submit(function (e) {
+    e.preventDefault();
+    const title = document.getElementById("todo-title").value;
+
+    $("#submit-todo").attr("disabled", true);
+    $.ajax({
+      type: "POST",
+      url: "{% url 'todos:add' %}",
+      data: {
+        csrfmiddlewaretoken: "{{ csrf_token }}",
+        title: title,
+      },
+      success: function (response) {
+        $("#add-todo").trigger("reset");
+        $("#submit-todo").removeAttr("disabled");
+        $("#todo-list").prepend(
+          "<li><strong>" +
+            response.title +
+            "</strong> | Author: <em> " +
+            response.author +
+            "</em> | Status: <span> " +
+            response.status +
+            "</span></li>"
+        );
+      },
+      error: function (response) {
+        $("#submit-todo").removeAttr("disabled");
+        alert(response["responseJSON"]["error"]);
+      },
+    });
+  });
+</script>
+{% endblock customjs %}
