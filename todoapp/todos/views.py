@@ -7,9 +7,12 @@ from .forms import TodoForm
 
 def todos_page(request):
     template_variable = {
-        'todos': Todo.objects.filter(author=request.user),
+        'todos': [],
         'form': TodoForm()
     }
+
+    if request.user.is_authenticated:
+        template_variable['todos'] = Todo.objects.filter(author=request.user).order_by("-id")
 
     return render(request, 'pages/home.html', template_variable)
 
