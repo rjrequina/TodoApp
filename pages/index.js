@@ -1,115 +1,206 @@
-import Head from 'next/head';
-import styles from '../styles/Home.module.css';
+import Head from "next/head";
+import { useEffect, useState } from "react";
+import { database } from "../firebaseApp";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+} from "firebase/firestore";
+import {
+  Input,
+  Container,
+  Button,
+  Grid,
+  Text,
+  Space,
+  Divider,
+  Select,
+} from "@mantine/core";
+import { debounce } from "lodash";
+import { ErrorAlert } from "../components/ErrorAlert";
+import { InfoAlert } from "../components/InfoAlert";
+import { Todo } from "../components/Todo";
 
+const databaseInstance = collection(database, "todos");
 export default function Home() {
+  const [todoText, setTodoText] = useState("");
+  const [addTodoLoading, setAddTodoLoading] = useState(false);
+  const [addTodoFailed, setAddTodoFailed] = useState(false);
+  const [todos, setTodos] = useState([]);
+  const [sortBy, setSortBy] = useState("a-to-z");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    let updatedTodos = [...todos];
+    updatedTodos.sort(sortFunction);
+    setTodos(updatedTodos);
+  }, [sortBy]);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(databaseInstance, (docs) => {
+      let updatedTodos = [];
+      docs.forEach((doc) => {
+        const data = doc.data();
+        const cleanedSearchTerm = searchTerm.trim().toUpperCase();
+        if (cleanedSearchTerm.length > 0) {
+          if (data.search_term.startsWith(cleanedSearchTerm)) {
+            updatedTodos.push({
+              ...data,
+              id: doc.id,
+            });
+          }
+        } else {
+          updatedTodos.push({
+            ...data,
+            id: doc.id,
+          });
+        }
+      });
+
+      updatedTodos.sort(sortFunction);
+      setTodos(updatedTodos);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [sortBy, searchTerm]);
+
+  const sortFunction = (a, b) => {
+    const value = sortBy === "a-to-z" ? 0 : 2;
+    if (a.title.toUpperCase() < b.title.toUpperCase()) {
+      return -1 + value;
+    }
+
+    if (a.title.toUpperCase() > b.title.toUpperCase()) {
+      return 1 - value;
+    }
+    return 0;
+  };
+
+  const handleOnTodoTextChange = (e) => {
+    setTodoText(e.target.value);
+  };
+
+  const handleOnAddTodoButtonClick = (e) => {
+    e.preventDefault();
+    setAddTodoFailed(false);
+    setAddTodoLoading(true);
+
+    addDoc(databaseInstance, {
+      title: todoText,
+      search_term: todoText.trim().toUpperCase(),
+    })
+      .then((_) => {
+        setAddTodoLoading(false);
+        setTodoText("");
+      })
+      .catch((_) => {
+        setAddTodoFailed(true);
+        setAddTodoLoading(false);
+      });
+  };
+
+  const search = (term) => {
+    const q = query(
+      databaseInstance,
+      orderBy("search_term"),
+      where("search_term", ">=", term.trim().toUpperCase()),
+      where("search_term", "<=", term.trim().toUpperCase() + "\uf8ff")
+    );
+
+    let updatedTodos = [];
+    getDocs(q).then((querySnapshot) => {
+      querySnapshot.forEach((doc) => {
+        updatedTodos.push({
+          ...doc.data(),
+          id: doc.id,
+        });
+      });
+      updatedTodos.sort(sortFunction);
+      setTodos(updatedTodos);
+    });
+  };
+
+  const handleOnSearchTermChange = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+
+    const debouncedSearch = debounce(() => {
+      search(term);
+    }, 300);
+    debouncedSearch();
+  };
+
   return (
-    <div className={styles.container}>
+    <Container>
       <Head>
-        <title>Create Next App</title>
+        <title>Todo List</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-
-      <main>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing <code>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel" className={styles.logo} />
-        </a>
-      </footer>
-
-      <style jsx>{`
-        main {
-          padding: 5rem 0;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-        }
-        footer {
-          width: 100%;
-          height: 100px;
-          border-top: 1px solid #eaeaea;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-        footer img {
-          margin-left: 0.5rem;
-        }
-        footer a {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          text-decoration: none;
-          color: inherit;
-        }
-        code {
-          background: #fafafa;
-          border-radius: 5px;
-          padding: 0.75rem;
-          font-size: 1.1rem;
-          font-family: Menlo, Monaco, Lucida Console, Liberation Mono,
-            DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
-        }
-      `}</style>
-
-      <style jsx global>{`
-        html,
-        body {
-          padding: 0;
-          margin: 0;
-          font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
-            Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue,
-            sans-serif;
-        }
-        * {
-          box-sizing: border-box;
-        }
-      `}</style>
-    </div>
-  )
+      <Container size="xs" px="xs">
+        <Text weight={500} ta="center" fz={"xl"}>
+          Todo App
+        </Text>
+        <Space h={"lg"} />
+      </Container>
+      <Container size="xs" px="xs">
+        <Grid>
+          <Grid.Col span={10}>
+            <Input
+              placeholder="Create todo..."
+              value={todoText}
+              onChange={handleOnTodoTextChange}
+              disabled={addTodoLoading}
+            />
+          </Grid.Col>
+          <Grid.Col span={2}>
+            <Button
+              disabled={!todoText}
+              loading={addTodoLoading}
+              onClick={handleOnAddTodoButtonClick}
+            >
+              Add
+            </Button>
+          </Grid.Col>
+        </Grid>
+        {addTodoFailed && (
+          <ErrorAlert text="An error occurred while adding a new todo." />
+        )}
+        <Divider my="xs" label="Your Todo List" labelPosition="center" />
+        <Input
+          placeholder="Search here..."
+          radius="xs"
+          size="xs"
+          value={searchTerm}
+          onChange={handleOnSearchTermChange}
+        />
+        <Select
+          label="Sort list"
+          placeholder="Sort alphabetically"
+          size="xs"
+          data={[
+            { value: "a-to-z", label: "A-to-Z" },
+            { value: "z-to-a", label: "Z-to-A" },
+          ]}
+          value={sortBy}
+          onChange={(value) => {
+            setSortBy(value);
+          }}
+        />
+      </Container>
+      {todos.length > 0 &&
+        todos.map((todo) => (
+          <Todo title={todo.title} id={todo.id} key={todo.id} />
+        ))}
+      {todos.length <= 0 && (
+        <Container size="xs" px="xs">
+          <InfoAlert text="Nothing to find here." />
+        </Container>
+      )}
+    </Container>
+  );
 }
